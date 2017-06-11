@@ -5,7 +5,7 @@
 #' @param bucket A character string with the name of the bucket, or an object of class \dQuote{s3_bucket}. If the latter and a region can be inferred from the bucket object attributes, then that region is used instead of \code{region}.
 #' @param path A character string with the name of the object to put in the bucket (sometimes called the object or 'key name' in the AWS documentation.)
 #' @param query Any query arguments, passed as a named list of key-value pairs.
-#' @param headers A list of request headers for the REST call.   
+#' @param headers A list of request headers for the REST call.
 #' @param request_body A character string containing request body data.
 #' @param accelerate A logical indicating whether to use AWS transfer acceleration, which can produce significant speed improvements for cross-country transfers. Acceleration only works with buckets that do not have dots in bucket name.
 #' @param dualstack A logical indicating whether to use \dQuote{dual stack} requests, which can resolve to either IPv4 or IPv6. See \url{http://docs.aws.amazon.com/AmazonS3/latest/dev/dual-stack-endpoints.html}.
@@ -26,26 +26,27 @@
 #' @importFrom utils URLencode
 #' @import aws.signature
 #' @export
-s3HTTP <- 
+s3HTTP <-
 function(verb = "GET",
-         bucket = "", 
-         path = "", 
+         bucket = "",
+         path = "",
          query = NULL,
-         headers = list(), 
+         headers = list(),
          request_body = "",
          accelerate = FALSE,
          dualstack = FALSE,
-         parse_response = TRUE, 
+         parse_response = TRUE,
          check_region = TRUE,
          url_style = c("path", "virtual"),
          base_url = "s3.amazonaws.com",
+         url_schema = c("https://", "http://"),
          verbose = getOption("verbose", FALSE),
-         region = Sys.getenv("AWS_DEFAULT_REGION", "us-east-1"), 
-         key = Sys.getenv("AWS_ACCESS_KEY_ID"), 
-         secret = Sys.getenv("AWS_SECRET_ACCESS_KEY"), 
+         region = Sys.getenv("AWS_DEFAULT_REGION", "us-east-1"),
+         key = Sys.getenv("AWS_ACCESS_KEY_ID"),
+         secret = Sys.getenv("AWS_SECRET_ACCESS_KEY"),
          session_token = Sys.getenv("AWS_SESSION_TOKEN"),
          ...) {
-    
+
     bucketname <- get_bucketname(bucket)
     if (isTRUE(check_region) && (bucketname != "")) {
         if (isTRUE(verbose)) {
@@ -59,11 +60,12 @@ function(verb = "GET",
             message(sprintf("Executing request using bucket region %s", region))
         }
     }
-    
+
     url_style <- match.arg(url_style)
-    url <- setup_s3_url(bucketname, region, path, accelerate, url_style = url_style, base_url = base_url, verbose = verbose)
+    url_schema <- match.arg(url_schema)
+    url <- setup_s3_url(bucketname, region, path, accelerate, url_style = url_style, base_url = base_url, url_schema, url_schema = url_schema, verbose = verbose)
     p <- parse_url(url)
-    
+
     current <- Sys.time()
     d_timestamp <- format(current, "%Y%m%dT%H%M%SZ", tz = "UTC")
     action <- if (p$path == "") "/" else paste0("/", p$path)
@@ -80,7 +82,7 @@ function(verb = "GET",
         if (isTRUE(verbose)) {
             message("Executing request without AWS credentials")
         }
-        headers[["x-amz-date"]] <- d_timestamp
+#        headers[["x-amz-date"]] <- d_timestamp
         Sig <- list()
         H <- do.call(add_headers, headers)
     } else {
@@ -146,7 +148,7 @@ function(verb = "GET",
     } else if (verb == "OPTIONS") {
         r <- VERB("OPTIONS", url, H, query = query, ...)
     }
-    
+
     if (isTRUE(parse_response)) {
         out <- parse_aws_s3_response(r, Sig, verbose = verbose)
     } else {
@@ -187,18 +189,20 @@ parse_aws_s3_response <- function(r, Sig, verbose = getOption("verbose")){
     return(response)
 }
 
-setup_s3_url <- 
-function(bucketname, 
-         region, 
-         path, 
-         accelerate = FALSE, 
+setup_s3_url <-
+function(bucketname,
+         region,
+         path,
+         accelerate = FALSE,
          dualstack = FALSE,
-         url_style = c("path", "virtual"), 
+         url_style = c("path", "virtual"),
+         url_schema = c("https://", "http://"),
          base_url = "s3.amazonaws.com",
-         verbose = getOption("verbose", FALSE)) 
+         verbose = getOption("verbose", FALSE))
 {
     url_style <- match.arg(url_style)
-    
+    url_schema <- match.arg(url_schema)
+
     # handle S3-compatible storage URLs
     if (base_url != "s3.amazonaws.com") {
         if (isTRUE(verbose) && url_style != "path") {
@@ -252,21 +256,21 @@ function(bucketname,
             }
         }
     }
-    
+
     # handle bucket name
     if (bucketname == "") {
-        url <- paste0("https://", base_url)
+        url <- paste0(url_schema, base_url)
     } else {
         if (url_style == "virtual") {
             if (isTRUE(accelerate) && grepl("\\.", bucketname)) {
                 stop("To use 'accelerate' for bucket name with dots (.), 'url_style' must be 'path'")
             }
-            url <- paste0("https://", bucketname, ".", base_url)
+            url <- paste0(url_schema, bucketname, ".", base_url)
         } else {
-            url <- paste0("https://", base_url, "/", bucketname)
+            url <- paste0(url_schema, base_url, "/", bucketname)
         }
     }
-    
+
     path <- if (path == "") "/" else {
         paste(sapply(
             strsplit(path, '/')[[1]],
@@ -274,10 +278,10 @@ function(bucketname,
             USE.NAMES = FALSE
         ), collapse = '/')
     }
-    url <- if (grepl('^[\\/].*', path)) { 
-        paste0(url, path) 
-    } else { 
-        paste(url, path, sep = "/") 
+    url <- if (grepl('^[\\/].*', path)) {
+        paste0(url, path)
+    } else {
+        paste(url, path, sep = "/")
     }
     if (isTRUE(verbose)) {
         message(sprintf("S3 Request URL: %s", url))
